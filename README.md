@@ -8,6 +8,8 @@ composer require sanmai/typesafe-ai-php
 
 Requires PHP 8.2 or newer.
 
+> **OpenJEV support:** Jev is built by [TypeSafe](https://typesafe.ai). This fork keeps TypeSafe as the default and adds optional support for [OpenJEV](https://openjev.sh), a free community gateway to the same Jev model — set `OPENJEV_API_KEY` (or `JEV_PROVIDER=openjev`) to use it. Original project: https://github.com/sanmai/typesafe-ai-php by @sanmai.
+
 **Something amiss?** [Open an issue](https://github.com/sanmai/typesafe-ai-php/issues/new), or, even better, send a PR!
 
 ## Overview
@@ -34,6 +36,22 @@ The API key is optional: without one the client reads `TYPESAFE_API_KEY`, and th
 
 ```php
 $client = TypeSafeClient::createInstance();
+```
+
+#### OpenJEV provider
+
+OpenJEV is a free community gateway to the same Jev model. The client selects the provider at `createInstance()` time, in this order:
+
+1. `JEV_PROVIDER=openjev` (explicit choice wins) → OpenJEV.
+2. `TYPESAFE_API_KEY` is set → TypeSafe (the unchanged default).
+3. Only `OPENJEV_API_KEY` is set → OpenJEV.
+
+Anyone with a TypeSafe key sees zero behaviour change. When OpenJEV is selected, the client reads `OPENJEV_API_KEY` and `OPENJEV_BASE_URL` (defaults to `https://api.openjev.sh`), and `evaluate()` defaults to the `openjev` model id.
+
+```bash
+OPENJEV_API_KEY=your-openjev-key php examples/urgency.php
+# or force it explicitly:
+JEV_PROVIDER=openjev TYPESAFE_API_KEY=your-typesafe-key php examples/urgency.php
 ```
 
 ### Using Result Classes

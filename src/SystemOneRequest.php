@@ -38,6 +38,12 @@ class SystemOneRequest
     public const MODEL_LATEST = 'jev-latest';
 
     /**
+     * Model id for the OpenJEV gateway (https://openjev.sh), a free community
+     * gateway to the same Jev model. Use this when JEV_PROVIDER=openjev.
+     */
+    public const MODEL_OPENJEV = 'openjev';
+
+    /**
      * @param ValueType $state Text, or structured data such as a chat log.
      * @param array<string, Question> $questions
      */

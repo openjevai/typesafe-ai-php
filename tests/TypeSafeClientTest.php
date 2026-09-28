@@ -49,6 +49,9 @@ class TypeSafeClientTest extends TestCase
 
     public function testCreateInstance(): void
     {
+        putenv('OPENJEV_API_KEY');
+        putenv('JEV_PROVIDER');
+
         /** @var Client $httpClient */
         $httpClient = $this->getPropertyValue(TypeSafeClient::createInstance('secret'), 'client');
 
@@ -79,6 +82,8 @@ class TypeSafeClientTest extends TestCase
     public function testCreateInstanceWithoutApiKey(): void
     {
         putenv('TYPESAFE_API_KEY');
+        putenv('OPENJEV_API_KEY');
+        putenv('JEV_PROVIDER');
 
         $this->expectException(InvalidArgumentException::class);
         $this->expectExceptionMessage('No API key given and TYPESAFE_API_KEY is not set.');

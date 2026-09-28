@@ -54,6 +54,23 @@ class TypeSafeClient
 
     public const BASE_URL_ENV = 'TYPESAFE_BASE_URL';
 
+    /**
+     * OpenJEV is a free community gateway to the same Jev model. TypeSafe stays
+     * the default; OpenJEV is opt-in via JEV_PROVIDER=openjev or by setting only
+     * OPENJEV_API_KEY (no TYPESAFE_API_KEY).
+     */
+    public const OPENJEV_BASE_URI = 'https://api.openjev.sh';
+
+    public const OPENJEV_API_KEY_ENV = 'OPENJEV_API_KEY';
+
+    public const OPENJEV_BASE_URL_ENV = 'OPENJEV_BASE_URL';
+
+    public const PROVIDER_ENV = 'JEV_PROVIDER';
+
+    public const PROVIDER_TYPESAFE = 'typesafe';
+
+    public const PROVIDER_OPENJEV = 'openjev';
+
     private const SYSTEM_ONE = '/v1/systemone';
 
     private const MODELS = '/v1/models';
@@ -92,9 +109,23 @@ class TypeSafeClient
         array $retryOptions = [],
         array $clientOptions = [],
     ): self {
-        $apiKey ??= getenv(self::API_KEY_ENV) ?: throw new InvalidArgumentException(
-            sprintf('No API key given and %s is not set.', self::API_KEY_ENV),
-        );
+        $provider = self::resolveProvider();
+
+        if ($apiKey === null) {
+            $apiKey = match ($provider) {
+                self::PROVIDER_OPENJEV => getenv(self::OPENJEV_API_KEY_ENV) ?: throw new InvalidArgumentException(
+                    sprintf('No API key given and %s is not set.', self::OPENJEV_API_KEY_ENV),
+                ),
+                default => getenv(self::API_KEY_ENV) ?: throw new InvalidArgumentException(
+                    sprintf('No API key given and %s is not set.', self::API_KEY_ENV),
+                ),
+            };
+        }
+
+        $baseUri = match ($provider) {
+            self::PROVIDER_OPENJEV => getenv(self::OPENJEV_BASE_URL_ENV) ?: self::OPENJEV_BASE_URI,
+            default => getenv(self::BASE_URL_ENV) ?: self::BASE_URI,
+        };
 
         $stack = HandlerStack::create();
 
@@ -109,7 +140,7 @@ class TypeSafeClient
         ], $retryOptions)), 'retry_on_status');
 
         $httpClient = new Client(array_merge([
-            'base_uri' => getenv(self::BASE_URL_ENV) ?: self::BASE_URI,
+            'base_uri' => $baseUri,
             'connect_timeout' => self::CONNECT_TIMEOUT,
             'timeout' => self::TIMEOUT,
             'http_errors' => true,
@@ -124,14 +155,67 @@ class TypeSafeClient
             $httpClient,
             $stack,
             Serializer::withJSONOptions(),
+            $provider,
         );
+    }
+
+    /**
+     * Resolves the provider following the selection rule: an explicit
+     * JEV_PROVIDER wins; otherwise TypeSafe when its key is set; otherwise
+     * OpenJEV when only OPENJEV_API_KEY is set; otherwise TypeSafe (the
+     * original default, which will throw if no key is configured).
+     */
+    private static function resolveProvider(): string
+    {
+        $explicit = getenv(self::PROVIDER_ENV);
+
+        if ($explicit !== false && $explicit !== '') {
+            $explicit = strtolower(trim($explicit));
+
+            if ($explicit === self::PROVIDER_OPENJEV) {
+                return self::PROVIDER_OPENJEV;
+            }
+
+            return self::PROVIDER_TYPESAFE;
+        }
+
+        if (getenv(self::API_KEY_ENV)) {
+            return self::PROVIDER_TYPESAFE;
+        }
+
+        if (getenv(self::OPENJEV_API_KEY_ENV)) {
+            return self::PROVIDER_OPENJEV;
+        }
+
+        return self::PROVIDER_TYPESAFE;
     }
 
     public function __construct(
         private readonly Client $client,
         private readonly HandlerStack $stack,
         private readonly SerializerInterface&JsonDeserializer $serializer,
+        private readonly string $provider = self::PROVIDER_TYPESAFE,
     ) {}
+
+    /**
+     * The model id the client defaults to for the configured provider:
+     * `jev-latest` for TypeSafe, `openjev` for the OpenJEV gateway.
+     */
+    public function defaultModel(): string
+    {
+        return match ($this->provider) {
+            self::PROVIDER_OPENJEV => SystemOneRequest::MODEL_OPENJEV,
+            default => SystemOneRequest::MODEL_LATEST,
+        };
+    }
+
+    /**
+     * The provider this client was built for: `typesafe` or `openjev`.
+     */
+    public function provider(): string
+    {
+        return $this->provider;
+    }
 
     public function setLogger(LoggerInterface $logger, string $template = self::LOG_TEMPLATE): self
     {
@@ -170,8 +254,9 @@ class TypeSafeClient
      * @param class-string<TResult> $class
      * @return TResult
      */
-    public function evaluate(string|array|object $state, string $class, string $model = SystemOneRequest::MODEL_LATEST): object
+    public function evaluate(string|array|object $state, string $class, ?string $model = null): object
     {
+        $model ??= $this->defaultModel();
         $reader = new AttributeReader(new ReflectionClass($class));
         $request = new SystemOneRequest($state, $model, [...$reader->questions()]);
 
